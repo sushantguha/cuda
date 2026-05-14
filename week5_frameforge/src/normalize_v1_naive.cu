@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include <cstdio>
 #include <cstdint>
 
 __global__ void normalize_v1_naive(const uint8_t* __restrict__ in,
@@ -8,15 +8,26 @@ __global__ void normalize_v1_naive(const uint8_t* __restrict__ in,
                                    float inv_sigma_r, float inv_sigma_g, float inv_sigma_b)
 {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0 && threadIdx.y == 0) {
-        printf("%d %d %d %d %d %d %d\n", gridDim.x, blockDim.x, blockIdx.x, threadIdx.x, tid, warpSize, tid);
+
+    // Thread (0, 0) prints the launch geometry + kernel parameters once.
+    if (blockIdx.x == 0 && threadIdx.x == 0) {
+        printf("[gpu] launch: gridDim.x=%d blockDim.x=%d warpSize=%d N=%d\n",
+               gridDim.x, blockDim.x, warpSize, N);
+        printf("[gpu] params: mu=(%.4f, %.4f, %.4f) inv_sigma=(%.4f, %.4f, %.4f)\n",
+               mu_r, mu_g, mu_b, inv_sigma_r, inv_sigma_g, inv_sigma_b);
     }
-    int mod = tid % 3;
-    if (mod == 0) {
-        out[tid] = (in[tid] - mu_r) * inv_sigma_r;
-    } else if (mod == 1) {
-        out[tid] = (in[tid] - mu_g) * inv_sigma_g;
-    } else {
-        out[tid] = (in[tid] - mu_b) * inv_sigma_b;
+
+    int   mod = tid % 3;
+    float result;
+    if      (mod == 0) result = (in[tid] - mu_r) * inv_sigma_r;
+    else if (mod == 1) result = (in[tid] - mu_g) * inv_sigma_g;
+    else               result = (in[tid] - mu_b) * inv_sigma_b;
+    out[tid] = result;
+
+    // Threads 0..2 each dump one channel's input / output for eyeball check.
+    if (blockIdx.x == 0 && threadIdx.x < 3) {
+        const char* ch = (threadIdx.x == 0) ? "R" : (threadIdx.x == 1) ? "G" : "B";
+        printf("[gpu] tid=%d ch=%s in=%u out=%.4f\n",
+               tid, ch, (unsigned) in[tid], result);
     }
 }
