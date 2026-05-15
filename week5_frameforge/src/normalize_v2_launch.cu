@@ -1,7 +1,7 @@
 #include <cstdio>
 #include <cstdint>
 
-__global__ void normalize_v1_naive(const uint8_t* __restrict__ in,
+__global__ void normalize_v2_launch(const uint8_t* __restrict__ in,
                                    float*          __restrict__ out,
                                    int   N,
                                    float mu_r,  float mu_g,  float mu_b,

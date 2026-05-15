@@ -51,8 +51,7 @@ build/src/frame.cu.o : src/frame.cu \
     /usr/local/cuda/bin/../targets/x86_64-linux/include/texture_indirect_functions.h \
     /usr/local/cuda/bin/../targets/x86_64-linux/include/surface_indirect_functions.h \
     /usr/local/cuda/bin/../targets/x86_64-linux/include/crt/cudacc_ext.h \
-    /usr/local/cuda/bin/../targets/x86_64-linux/include/device_launch_parameters.h \
-    include/frame.hpp
+    /usr/local/cuda/bin/../targets/x86_64-linux/include/device_launch_parameters.h
 
 /usr/local/cuda/bin/../targets/x86_64-linux/include/cuda_runtime.h:
 
@@ -159,5 +158,3 @@ build/src/frame.cu.o : src/frame.cu \
 /usr/local/cuda/bin/../targets/x86_64-linux/include/crt/cudacc_ext.h:
 
 /usr/local/cuda/bin/../targets/x86_64-linux/include/device_launch_parameters.h:
-
-include/frame.hpp:

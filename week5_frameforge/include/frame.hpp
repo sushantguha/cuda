@@ -3,8 +3,6 @@
 #include <cstdlib>
 #include <iostream>
 
-// Wraps every CUDA Runtime API call. On failure, prints the error name + message
-// plus file:line of the call site, then aborts. Matches FrameForge spec §5.
 #define CUDA_CHECK(expr)                                                      \
   do {                                                                        \
     cudaError_t err__ = (expr);                                               \
@@ -28,11 +26,9 @@ class FrameBuffer {
        if (dataPtr) CUDA_CHECK(cudaFree(dataPtr));
     }
 
-    // Prevent copying
     FrameBuffer(const FrameBuffer&) = delete;
     FrameBuffer& operator=(const FrameBuffer&) = delete;
-    
-    // Allow moving
+
     FrameBuffer(FrameBuffer&& other) noexcept : dataPtr(other.dataPtr) {
         other.dataPtr = nullptr;
         size = other.size;
@@ -49,13 +45,13 @@ class FrameBuffer {
         }
         return *this;
     }
-    void copy_from_host(const T* h_src) {        // H2D — populate the buffer
+    void copy_from_host(const T* h_src) {
         CUDA_CHECK(cudaMemcpy(dataPtr, h_src,
                             size * sizeof(T),
                             cudaMemcpyHostToDevice));
     }
 
-    void copy_to_host(T* h_dst) const {          // D2H — read results back
+    void copy_to_host(T* h_dst) const {
         CUDA_CHECK(cudaMemcpy(h_dst, dataPtr,
                             size * sizeof(T),
                             cudaMemcpyDeviceToHost));

@@ -1,4 +1,4 @@
-build/src/main.cu.o : src/main.cu \
+build/src/normalize_v2_launch.cu.o : src/normalize_v2_launch.cu \
     /usr/local/cuda/bin/../targets/x86_64-linux/include/cuda_runtime.h \
     /usr/local/cuda/bin/../targets/x86_64-linux/include/crt/host_config.h \
     /usr/local/cuda/bin/../targets/x86_64-linux/include/builtin_types.h \
@@ -51,10 +51,7 @@ build/src/main.cu.o : src/main.cu \
     /usr/local/cuda/bin/../targets/x86_64-linux/include/texture_indirect_functions.h \
     /usr/local/cuda/bin/../targets/x86_64-linux/include/surface_indirect_functions.h \
     /usr/local/cuda/bin/../targets/x86_64-linux/include/crt/cudacc_ext.h \
-    /usr/local/cuda/bin/../targets/x86_64-linux/include/device_launch_parameters.h \
-    include/frame.hpp \
-    include/kernels.cuh \
-    include/bench.hpp
+    /usr/local/cuda/bin/../targets/x86_64-linux/include/device_launch_parameters.h
 
 /usr/local/cuda/bin/../targets/x86_64-linux/include/cuda_runtime.h:
 
@@ -161,9 +158,3 @@ build/src/main.cu.o : src/main.cu \
 /usr/local/cuda/bin/../targets/x86_64-linux/include/crt/cudacc_ext.h:
 
 /usr/local/cuda/bin/../targets/x86_64-linux/include/device_launch_parameters.h:
-
-include/frame.hpp:
-
-include/kernels.cuh:
-
-include/bench.hpp:
