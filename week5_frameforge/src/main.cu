@@ -25,6 +25,14 @@ int main() {
     FrameBuffer<uint8_t> d_in(N);
     FrameBuffer<float>   d_out(N);
 
+    // 8 MB > T4 L2 (4 MB) — used to flush cache between benchmarks
+    void* l2_flush;
+    CUDA_CHECK(cudaMalloc(&l2_flush, 8 * 1024 * 1024));
+    auto flush_l2 = [&]() {
+        CUDA_CHECK(cudaMemset(l2_flush, 0, 8 * 1024 * 1024));
+        CUDA_CHECK(cudaDeviceSynchronize());
+    };
+
     // run_config: times kernel-only (→ effective BW) and H2D+kernel+D2H (→ e2e latency)
     auto run_config = [&](const char* label, auto kernel_fn, bool pinned) {
         uint8_t* h_in;
@@ -43,6 +51,7 @@ int main() {
 
         // --- kernel-only bench (data pre-staged on device) ---
         d_in.copy_from_host(h_in);
+        flush_l2();
         kernel_fn<<<grid, BLOCK_SIZE>>>(d_in.dataPtr, d_out.dataPtr, N,     // warm-up
             mu[0], mu[1], mu[2], inv_sigma[0], inv_sigma[1], inv_sigma[2]);
         CUDA_CHECK(cudaDeviceSynchronize());
@@ -59,6 +68,7 @@ int main() {
         float k_ms = k_times[k_times.size() / 2];
 
         // --- e2e bench: H2D + kernel + D2H ---
+        flush_l2();
         // warm-up
         CUDA_CHECK(cudaMemcpyAsync(d_in.dataPtr, h_in,  N * sizeof(uint8_t), cudaMemcpyHostToDevice));
         kernel_fn<<<grid, BLOCK_SIZE>>>(d_in.dataPtr, d_out.dataPtr, N,
@@ -91,5 +101,6 @@ int main() {
     run_config("pinned   + strided",   normalize_v1_strided, true);
     run_config("pageable + strided",   normalize_v1_strided, false);
 
+    CUDA_CHECK(cudaFree(l2_flush));
     return 0;
 }
