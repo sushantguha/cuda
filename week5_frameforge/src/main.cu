@@ -58,7 +58,7 @@ int main() {
                 timer.tic();
             }
 
-            normalize_v1_naive<<<grid, BLOCK_SIZE>>>(
+            normalize_v2_launch<<<grid, BLOCK_SIZE>>>(
                 uint8Val.dataPtr, fpVal.dataPtr, N,
                 mu[0], mu[1], mu[2],
                 inv_sigma[0], inv_sigma[1], inv_sigma[2]);
