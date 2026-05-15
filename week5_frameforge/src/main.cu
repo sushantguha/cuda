@@ -1,125 +1,95 @@
 #include "frame.hpp"
 #include "kernels.cuh"
 #include <cstdio>
-#include <iostream>
 #include "bench.hpp"
 #include <vector>
 #include <algorithm>
 
-#define WIDTH 1280
-#define HEIGHT 960
-#define CHANNELS 3
-#define PIXELS WIDTH * HEIGHT * CHANNELS
+#define WIDTH      1280
+#define HEIGHT     960
+#define CHANNELS   3
+#define PIXELS     (WIDTH * HEIGHT * CHANNELS)
+#define BLOCK_SIZE 256
+#define RUNS       50
 
-#define LOG(...)                                          \
-  do {                                                    \
-    std::fprintf(stderr, "[host] " __VA_ARGS__);          \
-    std::fprintf(stderr, "\n");                           \
-  } while (0)
+#define LOG(...) do { std::fprintf(stderr, "[host] " __VA_ARGS__); std::fprintf(stderr, "\n"); } while(0)
 
 constexpr float mu[3]        = { 0.485f, 0.456f, 0.406f };
 constexpr float inv_sigma[3] = { 1.0f / 0.229f, 1.0f / 0.224f, 1.0f / 0.225f };
 
 int main() {
-    const int N    = PIXELS;
-    
+    const int   N            = PIXELS;
+    const int   grid         = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    const float kernel_bytes = (float)(N * 1 + N * 4);   // uint8 in + float32 out
 
-    // LOG("FrameForge v1_naive  W=%d H=%d C=%d  N=%d", WIDTH, HEIGHT, CHANNELS, N);
-    // LOG("launch config        block=%d grid=%d threads=%d", BLOCK_SIZE, grid, BLOCK_SIZE * grid);
-    // LOG("mu        = (%.4f, %.4f, %.4f)", mu[0], mu[1], mu[2]);
-    // LOG("inv_sigma = (%.4f, %.4f, %.4f)", inv_sigma[0], inv_sigma[1], inv_sigma[2]);
+    FrameBuffer<uint8_t> d_in(N);
+    FrameBuffer<float>   d_out(N);
 
-    FrameBuffer<uint8_t> uint8Val(N);
-    FrameBuffer<float>   fpVal(N);
-    uint8_t* h_data   = new uint8_t[N];
-    float*   out      = new float[N];
-    float*   expected = new float[N];
-    std::vector<float> medianTimes = {};
-    std::vector<int> blockSizes = {32, 64, 128, 256, 512, 1024};
-
-    for (int i = 0; i < N; i++) h_data[i] = i % 256;
-    // LOG("input ready — h_data[0..5] = %u %u %u %u %u %u", h_data[0], h_data[1], h_data[2], h_data[3], h_data[4], h_data[5]);
-
-    uint8Val.copy_from_host(h_data);
-    // LOG("H2D done — %zu bytes copied", (size_t) N * sizeof(uint8_t));
-
-    // LOG("launching normalize_v1_naive<<<%d, %d>>>", grid, BLOCK_SIZE);
-
-    // Sweep through block sizes
-    for (int BLOCK_SIZE : blockSizes) {
-        const int grid = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
-
-        std::vector<float> times = {};
-
-        for (int i = 0; i < 51; i++) {
-            
-            Timer timer;
-            if (i) {
-                timer.tic();
-            }
-
-            normalize_v2_launch<<<grid, BLOCK_SIZE>>>(
-                uint8Val.dataPtr, fpVal.dataPtr, N,
-                mu[0], mu[1], mu[2],
-                inv_sigma[0], inv_sigma[1], inv_sigma[2]);
-
-            // Check for error in kernel launch
-            cudaError_t launch_err = cudaPeekAtLastError();
-            if (launch_err != cudaSuccess) {
-                LOG("kernel launch FAILED: %s", cudaGetErrorString(launch_err));
-                return 1;
-            }
-
-            if (i) {
-                times.push_back(timer.toc_ms());  // blocks via cudaEventSynchronize internally
-            } else {
-                CUDA_CHECK(cudaDeviceSynchronize()); // warm-up sync
-            }
+    // run_config: times kernel-only (→ effective BW) and H2D+kernel+D2H (→ e2e latency)
+    auto run_config = [&](const char* label, auto kernel_fn, bool pinned) {
+        uint8_t* h_in;
+        float*   h_out;
+        if (pinned) {
+            void *raw_in, *raw_out;
+            CUDA_CHECK(cudaHostAlloc(&raw_in,  N * sizeof(uint8_t), cudaHostAllocDefault));
+            CUDA_CHECK(cudaHostAlloc(&raw_out, N * sizeof(float),   cudaHostAllocDefault));
+            h_in  = static_cast<uint8_t*>(raw_in);
+            h_out = static_cast<float*>(raw_out);
+        } else {
+            h_in  = new uint8_t[N];
+            h_out = new float[N];
         }
-        
-        std::sort(times.begin(), times.end());
-        float median = times[times.size() / 2];
-        medianTimes.push_back(median);
-        
-    }
+        for (int i = 0; i < N; i++) h_in[i] = i % 256;
 
-    
+        // --- kernel-only bench (data pre-staged on device) ---
+        d_in.copy_from_host(h_in);
+        kernel_fn<<<grid, BLOCK_SIZE>>>(d_in.dataPtr, d_out.dataPtr, N,     // warm-up
+            mu[0], mu[1], mu[2], inv_sigma[0], inv_sigma[1], inv_sigma[2]);
+        CUDA_CHECK(cudaDeviceSynchronize());
 
-    fpVal.copy_to_host(out);
-    LOG("D2H done — %zu bytes copied", (size_t) N * sizeof(float));
-    LOG("gpu out      [0..5] = %.4f %.4f %.4f %.4f %.4f %.4f",  out[0], out[1], out[2], out[3], out[4], out[5]);
-
-    for (int i = 0; i < N; i++) {
-        int c       = i % 3;
-        expected[i] = (h_data[i] - mu[c]) * inv_sigma[c];
-    }
-    LOG("cpu expected [0..5] = %.4f %.4f %.4f %.4f %.4f %.4f", expected[0], expected[1], expected[2], expected[3], expected[4], expected[5]);
-
-    int  first_mismatch = -1;
-    int  mismatch_count = 0;
-    for (int i = 0; i < N; i++) {
-        if (out[i] != expected[i]) {
-            if (first_mismatch < 0) first_mismatch = i;
-            mismatch_count++;
+        std::vector<float> k_times;
+        k_times.reserve(RUNS);
+        for (int i = 0; i < RUNS; i++) {
+            Timer t; t.tic();
+            kernel_fn<<<grid, BLOCK_SIZE>>>(d_in.dataPtr, d_out.dataPtr, N,
+                mu[0], mu[1], mu[2], inv_sigma[0], inv_sigma[1], inv_sigma[2]);
+            k_times.push_back(t.toc_ms());
         }
-    }
+        std::sort(k_times.begin(), k_times.end());
+        float k_ms = k_times[k_times.size() / 2];
 
-    if (mismatch_count == 0) {
-        LOG("PASS — all %d elements bit-identical to CPU reference", N);
-    } else {
-        LOG("FAIL — %d / %d mismatches; first at idx=%d channel=%d gpu=%.6f cpu=%.6f diff=%.6e",
-            mismatch_count, N,
-            first_mismatch, first_mismatch % 3,
-            out[first_mismatch], expected[first_mismatch],
-            out[first_mismatch] - expected[first_mismatch]);
-    }
+        // --- e2e bench: H2D + kernel + D2H ---
+        // warm-up
+        CUDA_CHECK(cudaMemcpyAsync(d_in.dataPtr, h_in,  N * sizeof(uint8_t), cudaMemcpyHostToDevice));
+        kernel_fn<<<grid, BLOCK_SIZE>>>(d_in.dataPtr, d_out.dataPtr, N,
+            mu[0], mu[1], mu[2], inv_sigma[0], inv_sigma[1], inv_sigma[2]);
+        CUDA_CHECK(cudaMemcpyAsync(h_out, d_out.dataPtr, N * sizeof(float), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaDeviceSynchronize());
 
-    for (size_t i = 0; i < blockSizes.size(); i++) {
-        LOG("block size: %4d  median: %.3f ms  (%.1f us)", blockSizes[i], medianTimes[i], medianTimes[i] * 1000.f);
-    }
+        std::vector<float> e2e_times;
+        e2e_times.reserve(RUNS);
+        for (int i = 0; i < RUNS; i++) {
+            Timer t; t.tic();
+            CUDA_CHECK(cudaMemcpyAsync(d_in.dataPtr, h_in,  N * sizeof(uint8_t), cudaMemcpyHostToDevice));
+            kernel_fn<<<grid, BLOCK_SIZE>>>(d_in.dataPtr, d_out.dataPtr, N,
+                mu[0], mu[1], mu[2], inv_sigma[0], inv_sigma[1], inv_sigma[2]);
+            CUDA_CHECK(cudaMemcpyAsync(h_out, d_out.dataPtr, N * sizeof(float), cudaMemcpyDeviceToHost));
+            e2e_times.push_back(t.toc_ms());
+        }
+        std::sort(e2e_times.begin(), e2e_times.end());
+        float e2e_ms = e2e_times[e2e_times.size() / 2];
 
-    delete[] h_data;
-    delete[] out;
-    delete[] expected;
-    return mismatch_count == 0 ? 0 : 1;
+        LOG("%-26s  kernel: %.3f ms  %.1f GB/s  |  e2e: %.3f ms",
+            label, k_ms, kernel_bytes / k_ms / 1e6f, e2e_ms);
+
+        if (pinned) { cudaFreeHost(h_in); cudaFreeHost(h_out); }
+        else        { delete[] h_in; delete[] h_out; }
+    };
+
+    run_config("pinned   + coalesced", normalize_v2_launch,  true);
+    run_config("pageable + coalesced", normalize_v2_launch,  false);
+    run_config("pinned   + strided",   normalize_v1_strided, true);
+    run_config("pageable + strided",   normalize_v1_strided, false);
+
+    return 0;
 }
