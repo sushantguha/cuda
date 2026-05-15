@@ -34,7 +34,7 @@ int main() {
     uint8_t* h_data   = new uint8_t[N];
     float*   out      = new float[N];
     float*   expected = new float[N];
-    std::vector<int> medianTimes = {};
+    std::vector<float> medianTimes = {};
     std::vector<int> blockSizes = {32, 64, 128, 256, 512, 1024};
 
     for (int i = 0; i < N; i++) h_data[i] = i % 256;
@@ -49,7 +49,7 @@ int main() {
     for (int BLOCK_SIZE : blockSizes) {
         const int grid = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
-        std::vector<int> times = {};
+        std::vector<float> times = {};
 
         for (int i = 0; i < 51; i++) {
             
@@ -62,7 +62,7 @@ int main() {
                 uint8Val.dataPtr, fpVal.dataPtr, N,
                 mu[0], mu[1], mu[2],
                 inv_sigma[0], inv_sigma[1], inv_sigma[2]);
-            
+
             // Check for error in kernel launch
             cudaError_t launch_err = cudaPeekAtLastError();
             if (launch_err != cudaSuccess) {
@@ -70,17 +70,15 @@ int main() {
                 return 1;
             }
 
-            CUDA_CHECK(cudaDeviceSynchronize());
-            // LOG("kernel sync done");
-            
             if (i) {
-                times.push_back(timer.toc_ms());
+                times.push_back(timer.toc_ms());  // blocks via cudaEventSynchronize internally
+            } else {
+                CUDA_CHECK(cudaDeviceSynchronize()); // warm-up sync
             }
         }
         
-        // Calculate median
         std::sort(times.begin(), times.end());
-        int median = times[times.size() / 2];
+        float median = times[times.size() / 2];
         medianTimes.push_back(median);
         
     }
@@ -117,7 +115,7 @@ int main() {
     }
 
     for (size_t i = 0; i < blockSizes.size(); i++) {
-        LOG("block size: %d, median time: %d ms", blockSizes[i], medianTimes[i]);
+        LOG("block size: %4d  median: %.3f ms  (%.1f us)", blockSizes[i], medianTimes[i], medianTimes[i] * 1000.f);
     }
 
     delete[] h_data;
