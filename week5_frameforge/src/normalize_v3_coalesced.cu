@@ -22,7 +22,9 @@ __global__ void normalize_v3_coalesced(const uint8_t* __restrict__ in,
     else if (mod == 1) result = (in[tid] - mu_g) * inv_sigma_g;
     else               result = (in[tid] - mu_b) * inv_sigma_b;
     out[tid] = result;
-    atomicAdd(d_sum, (double)result);
+
+    // Atomic add for reduction
+    // atomicAdd(d_sum, (double)result);
 
     // if (blockIdx.x == 0 && threadIdx.x < 3) {
     //     const char* ch = (threadIdx.x == 0) ? "R" : (threadIdx.x == 1) ? "G" : "B";
