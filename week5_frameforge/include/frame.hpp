@@ -56,6 +56,18 @@ class FrameBuffer {
                             size * sizeof(T),
                             cudaMemcpyDeviceToHost));
     }
+    void copy_from_host_async(const T* h_src, size_t count, size_t dst_offset,
+                              cudaStream_t stream) {
+        CUDA_CHECK(cudaMemcpyAsync(dataPtr + dst_offset, h_src,
+                                   count * sizeof(T),
+                                   cudaMemcpyHostToDevice, stream));
+    }
+    void copy_to_host_async(T* h_dst, size_t count, size_t src_offset,
+                            cudaStream_t stream) const {
+        CUDA_CHECK(cudaMemcpyAsync(h_dst, dataPtr + src_offset,
+                                   count * sizeof(T),
+                                   cudaMemcpyDeviceToHost, stream));
+    }
     T* device() noexcept {
         return dataPtr;
     }

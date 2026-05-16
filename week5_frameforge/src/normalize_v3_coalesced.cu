@@ -5,7 +5,7 @@ __global__ void normalize_v3_coalesced(const uint8_t* __restrict__ in,
                                    float*          __restrict__ out,
                                    int   N,
                                    float mu_r,  float mu_g,  float mu_b,
-                                   float inv_sigma_r, float inv_sigma_g, float inv_sigma_b)
+                                   float inv_sigma_r, float inv_sigma_g, float inv_sigma_b, float *d_sum)
 {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -15,13 +15,14 @@ __global__ void normalize_v3_coalesced(const uint8_t* __restrict__ in,
     //     printf("[gpu] params: mu=(%.4f, %.4f, %.4f) inv_sigma=(%.4f, %.4f, %.4f)\n",
     //            mu_r, mu_g, mu_b, inv_sigma_r, inv_sigma_g, inv_sigma_b);
     // }
-
+    if (tid >= N) return;
     int   mod = tid % 3;
     float result;
     if      (mod == 0) result = (in[tid] - mu_r) * inv_sigma_r;
     else if (mod == 1) result = (in[tid] - mu_g) * inv_sigma_g;
     else               result = (in[tid] - mu_b) * inv_sigma_b;
     out[tid] = result;
+    atomicAdd(d_sum, result);
 
     // if (blockIdx.x == 0 && threadIdx.x < 3) {
     //     const char* ch = (threadIdx.x == 0) ? "R" : (threadIdx.x == 1) ? "G" : "B";

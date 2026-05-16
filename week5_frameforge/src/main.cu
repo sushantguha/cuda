@@ -4,6 +4,7 @@
 #include "bench.hpp"
 #include <vector>
 #include <algorithm>
+#include <cmath>
 
 #define WIDTH      1280
 #define HEIGHT     960
@@ -25,14 +26,6 @@ int main() {
     FrameBuffer<uint8_t> d_in(N);
     FrameBuffer<float>   d_out(N);
 
-    // 8 MB > T4 L2 (4 MB) — used to flush cache between benchmarks
-    void* l2_flush;
-    CUDA_CHECK(cudaMalloc(&l2_flush, 8 * 1024 * 1024));
-    auto flush_l2 = [&]() {
-        CUDA_CHECK(cudaMemset(l2_flush, 0, 8 * 1024 * 1024));
-        CUDA_CHECK(cudaDeviceSynchronize());
-    };
-
     // run_config: times kernel-only (→ effective BW) and H2D+kernel+D2H (→ e2e latency)
     auto run_config = [&](const char* label, auto kernel_fn, bool pinned) {
         uint8_t* h_in;
@@ -51,7 +44,6 @@ int main() {
 
         // --- kernel-only bench (data pre-staged on device) ---
         d_in.copy_from_host(h_in);
-        flush_l2();
         kernel_fn<<<grid, BLOCK_SIZE>>>(d_in.dataPtr, d_out.dataPtr, N,     // warm-up
             mu[0], mu[1], mu[2], inv_sigma[0], inv_sigma[1], inv_sigma[2]);
         CUDA_CHECK(cudaDeviceSynchronize());
@@ -68,7 +60,6 @@ int main() {
         float k_ms = k_times[k_times.size() / 2];
 
         // --- e2e bench: H2D + kernel + D2H ---
-        flush_l2();
         // warm-up
         CUDA_CHECK(cudaMemcpyAsync(d_in.dataPtr, h_in,  N * sizeof(uint8_t), cudaMemcpyHostToDevice));
         kernel_fn<<<grid, BLOCK_SIZE>>>(d_in.dataPtr, d_out.dataPtr, N,
@@ -101,6 +92,47 @@ int main() {
     run_config("pinned   + strided",   normalize_v1_strided, true);
     run_config("pageable + strided",   normalize_v1_strided, false);
 
-    CUDA_CHECK(cudaFree(l2_flush));
+    // ---------------- Day 4: streams + atomic reduction ----------------
+    void *raw_in, *raw_out;
+    CUDA_CHECK(cudaHostAlloc(&raw_in,  N * sizeof(uint8_t), cudaHostAllocDefault));
+    CUDA_CHECK(cudaHostAlloc(&raw_out, N * sizeof(float),   cudaHostAllocDefault));
+    uint8_t* h_in_p  = static_cast<uint8_t*>(raw_in);
+    float*   h_out_p = static_cast<float*>(raw_out);
+    for (int i = 0; i < N; i++) h_in_p[i] = i % 256;
+
+    // CPU reference: same per-channel normalize, mean over all elements
+    double cpu_sum = 0.0;
+    for (int i = 0; i < N; i++) {
+        int c = i % 3;
+        cpu_sum += ((float)h_in_p[i] - mu[c]) * inv_sigma[c];
+    }
+    float cpu_mean = (float)(cpu_sum / N);
+
+    for (int K : {1, 2, 4, 8}) {
+        std::vector<float> wall_times;
+        wall_times.reserve(RUNS);
+        float gpu_mean = 0.f;
+
+        // warm-up
+        pipeline_v4_streams(h_in_p, h_out_p, &gpu_mean, N, K,
+            mu[0], mu[1], mu[2], inv_sigma[0], inv_sigma[1], inv_sigma[2]);
+
+        for (int i = 0; i < RUNS; i++) {
+            Timer t; t.tic();
+            pipeline_v4_streams(h_in_p, h_out_p, &gpu_mean, N, K,
+                mu[0], mu[1], mu[2], inv_sigma[0], inv_sigma[1], inv_sigma[2]);
+            wall_times.push_back(t.toc_ms());
+        }
+        std::sort(wall_times.begin(), wall_times.end());
+        float wall_ms = wall_times[wall_times.size() / 2];
+        float diff    = std::fabs(gpu_mean - cpu_mean);
+
+        LOG("K=%d  wall: %.3f ms  gpu_mean=%.6f  cpu_mean=%.6f  |diff|=%.3e",
+            K, wall_ms, gpu_mean, cpu_mean, diff);
+    }
+
+    cudaFreeHost(h_in_p);
+    cudaFreeHost(h_out_p);
+
     return 0;
 }
