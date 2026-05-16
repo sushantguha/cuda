@@ -2,7 +2,7 @@
 #include "kernels.cuh"
 #include <algorithm>
 
-void pipeline_v4_streams(const uint8_t* h_in, float* h_out, float* h_sum,
+void pipeline_v4_streams(const uint8_t* h_in, float* h_out, double* h_sum,
                          int N, int K,
                          float mu_r,        float mu_g,        float mu_b,
                          float inv_sigma_r, float inv_sigma_g, float inv_sigma_b) {
@@ -12,8 +12,8 @@ void pipeline_v4_streams(const uint8_t* h_in, float* h_out, float* h_sum,
 
     FrameBuffer<uint8_t> d_in(N);
     FrameBuffer<float>   d_out(N);
-    FrameBuffer<float>   d_sum(1);
-    CUDA_CHECK(cudaMemset(d_sum.dataPtr, 0, sizeof(float)));
+    FrameBuffer<double>  d_sum(1);
+    CUDA_CHECK(cudaMemset(d_sum.dataPtr, 0, sizeof(double)));
 
     cudaStream_t* streams = new cudaStream_t[K];
     for (int i = 0; i < K; i++) CUDA_CHECK(cudaStreamCreate(&streams[i]));
@@ -41,7 +41,7 @@ void pipeline_v4_streams(const uint8_t* h_in, float* h_out, float* h_sum,
     for (int i = 0; i < K; i++) CUDA_CHECK(cudaStreamDestroy(streams[i]));
     delete[] streams;
 
-    CUDA_CHECK(cudaMemcpy(h_sum, d_sum.dataPtr, sizeof(float), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_sum, d_sum.dataPtr, sizeof(double), cudaMemcpyDeviceToHost));
     *h_sum /= N;
     // d_in / d_out / d_sum freed by FrameBuffer destructors
 }

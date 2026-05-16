@@ -108,12 +108,12 @@ int main() {
         cpu_out[i] = ((float)h_in_p[i] - mu[c]) * inv_sigma[c];
         cpu_sum   += cpu_out[i];
     }
-    float cpu_mean = (float)(cpu_sum / N);
+    double cpu_mean = cpu_sum / N;
 
     for (int K : {1, 2, 4, 8}) {
         std::vector<float> wall_times;
         wall_times.reserve(RUNS);
-        float gpu_mean = 0.f;
+        double gpu_mean = 0.0;
 
         // warm-up + correctness check on per-element output
         pipeline_v4_streams(h_in_p, h_out_p, &gpu_mean, N, K,
@@ -135,8 +135,8 @@ int main() {
             wall_times.push_back(t.toc_ms());
         }
         std::sort(wall_times.begin(), wall_times.end());
-        float wall_ms   = wall_times[wall_times.size() / 2];
-        float mean_diff = std::fabs(gpu_mean - cpu_mean);
+        float  wall_ms   = wall_times[wall_times.size() / 2];
+        double mean_diff = std::fabs(gpu_mean - cpu_mean);
 
         LOG("K=%d  wall: %.3f ms  mean_|diff|=%.3e  out_max_abs=%.3e  out_max_rel=%.3e  (at i=%d)",
             K, wall_ms, mean_diff, max_abs, max_rel, bad_idx);
