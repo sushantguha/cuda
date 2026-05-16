@@ -100,11 +100,13 @@ int main() {
     float*   h_out_p = static_cast<float*>(raw_out);
     for (int i = 0; i < N; i++) h_in_p[i] = i % 256;
 
-    // CPU reference: same per-channel normalize, mean over all elements
+    // CPU reference: per-element normalized output + mean
+    std::vector<float> cpu_out(N);
     double cpu_sum = 0.0;
     for (int i = 0; i < N; i++) {
         int c = i % 3;
-        cpu_sum += ((float)h_in_p[i] - mu[c]) * inv_sigma[c];
+        cpu_out[i] = ((float)h_in_p[i] - mu[c]) * inv_sigma[c];
+        cpu_sum   += cpu_out[i];
     }
     float cpu_mean = (float)(cpu_sum / N);
 
@@ -113,9 +115,18 @@ int main() {
         wall_times.reserve(RUNS);
         float gpu_mean = 0.f;
 
-        // warm-up
+        // warm-up + correctness check on per-element output
         pipeline_v4_streams(h_in_p, h_out_p, &gpu_mean, N, K,
             mu[0], mu[1], mu[2], inv_sigma[0], inv_sigma[1], inv_sigma[2]);
+
+        float max_abs = 0.f, max_rel = 0.f;
+        int   bad_idx = -1;
+        for (int i = 0; i < N; i++) {
+            float a   = std::fabs(h_out_p[i] - cpu_out[i]);
+            float rel = a / std::max(std::fabs(cpu_out[i]), 1e-6f);
+            if (a > max_abs)   { max_abs = a; bad_idx = i; }
+            if (rel > max_rel) { max_rel = rel; }
+        }
 
         for (int i = 0; i < RUNS; i++) {
             Timer t; t.tic();
@@ -124,11 +135,11 @@ int main() {
             wall_times.push_back(t.toc_ms());
         }
         std::sort(wall_times.begin(), wall_times.end());
-        float wall_ms = wall_times[wall_times.size() / 2];
-        float diff    = std::fabs(gpu_mean - cpu_mean);
+        float wall_ms   = wall_times[wall_times.size() / 2];
+        float mean_diff = std::fabs(gpu_mean - cpu_mean);
 
-        LOG("K=%d  wall: %.3f ms  gpu_mean=%.6f  cpu_mean=%.6f  |diff|=%.3e",
-            K, wall_ms, gpu_mean, cpu_mean, diff);
+        LOG("K=%d  wall: %.3f ms  mean_|diff|=%.3e  out_max_abs=%.3e  out_max_rel=%.3e  (at i=%d)",
+            K, wall_ms, mean_diff, max_abs, max_rel, bad_idx);
     }
 
     cudaFreeHost(h_in_p);
