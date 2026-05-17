@@ -110,7 +110,7 @@ int main() {
     }
     double cpu_mean = cpu_sum / N;
 
-    for (int K : {1, 2, 4, 8}) {
+    for (int K : {1, 2, 4, 8, 16, 32}) {
         std::vector<float> wall_times;
         wall_times.reserve(RUNS);
         double gpu_mean = 0.0;
