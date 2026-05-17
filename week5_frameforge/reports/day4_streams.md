@@ -27,14 +27,18 @@ K=8  wall: 8.433 ms  mean_|diff|=8.754e-11  out_max_abs=0.000e+00  out_max_rel=0
 (Compare e2e of week-3 with wall of week-4)
 
 ```
-pinned   + coalesced        kernel: 0.101 ms  182.2 GB/s  |  e2e: 1.534 ms
-pageable + coalesced        kernel: 0.101 ms  181.8 GB/s  |  e2e: 3.999 ms
-pinned   + strided          kernel: 0.365 ms  50.6 GB/s  |  e2e: 1.790 ms
-pageable + strided          kernel: 0.354 ms  52.0 GB/s  |  e2e: 4.072 ms
-K=1  wall: 2.327 ms  mean_|diff|=5.622e+02 (IGNORE)  out_max_abs=0.000e+00  out_max_rel=0.000e+00  (at i=-1)
-K=2  wall: 2.169 ms  mean_|diff|=5.622e+02 (IGNORE)  out_max_abs=0.000e+00  out_max_rel=0.000e+00  (at i=-1)
-K=4  wall: 2.150 ms  mean_|diff|=5.622e+02 (IGNORE)  out_max_abs=0.000e+00  out_max_rel=0.000e+00  (at i=-1)
-K=8  wall: 2.125 ms  mean_|diff|=5.622e+02 (IGNORE)  out_max_abs=0.000e+00  out_max_rel=0.000e+00  (at i=-1)
+K=1  wall: 2.364 ms  mean_|diff|=5.622e+02  out_max_abs=0.000e+00  out_max_rel=0.000e+00  (at i=-1)
+K=2  wall: 2.208 ms  mean_|diff|=5.622e+02  out_max_abs=0.000e+00  out_max_rel=0.000e+00  (at i=-1)
+K=4  wall: 2.149 ms  mean_|diff|=5.622e+02  out_max_abs=0.000e+00  out_max_rel=0.000e+00  (at i=-1)
+K=8  wall: 2.162 ms  mean_|diff|=5.622e+02  out_max_abs=0.000e+00  out_max_rel=0.000e+00  (at i=-1)
+K=16  wall: 2.204 ms  mean_|diff|=5.622e+02  out_max_abs=0.000e+00  out_max_rel=0.000e+00  (at i=-1)
+K=32  wall: 2.288 ms  mean_|diff|=5.622e+02  out_max_abs=0.000e+00  out_max_rel=0.000e+00  (at i=-1)
+K=64  wall: 2.538 ms  mean_|diff|=5.622e+02  out_max_abs=0.000e+00  out_max_rel=0.000e+00  (at i=-1)
+K=128  wall: 3.037 ms  mean_|diff|=5.622e+02  out_max_abs=0.000e+00  out_max_rel=0.000e+00  (at i=-1)
+K=256  wall: 5.101 ms  mean_|diff|=5.622e+02  out_max_abs=0.000e+00  out_max_rel=0.000e+00  (at i=-1)
+
+[ ]
+
 ```
 
 ## Why the speedup is small
@@ -54,3 +58,4 @@ The wall time is bounded below by the slowest engine's total work — here D2H, 
 - With atomic add, the runtime is higher due to serialization of atomic writes.
 - In both cases, the wall (e2e) time reduces as K increases. The more parallelization we can do in terms of streaming, the better.
 - The wall time is higher than without streaming, because the timed portion includes the initialization and allocation of device memory and streams, something that was not timed in week-3 runs.
+- When K goes over a certain number, we get 'chunk' overhead - where there's a fixed cost per chunk, and having to pay that fixed cost several times starts to lose out to the dynamic cost savings of non-fixed chunking.

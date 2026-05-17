@@ -29,3 +29,4 @@ void pipeline_v4_streams(const uint8_t* h_in, float* h_out, double* h_sum,
                          int N, int K,
                          float mu_r,        float mu_g,        float mu_b,
                          float inv_sigma_r, float inv_sigma_g, float inv_sigma_b);
+
