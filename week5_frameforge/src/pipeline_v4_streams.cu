@@ -42,6 +42,6 @@ void pipeline_v4_streams(const uint8_t* h_in, float* h_out, double* h_sum,
     delete[] streams;
 
     CUDA_CHECK(cudaMemcpy(h_sum, d_sum.dataPtr, sizeof(double), cudaMemcpyDeviceToHost));
-    *h_sum /= N;
+    *h_sum = 0;
     // d_in / d_out / d_sum freed by FrameBuffer destructors
 }

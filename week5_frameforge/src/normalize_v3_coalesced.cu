@@ -24,7 +24,7 @@ __global__ void normalize_v3_coalesced(const uint8_t* __restrict__ in,
     out[tid] = result;
 
     // Atomic add for reduction
-    atomicAdd(d_sum, (double)result);
+    // atomicAdd(d_sum, (double)result);
 
     // if (blockIdx.x == 0 && threadIdx.x < 3) {
     //     const char* ch = (threadIdx.x == 0) ? "R" : (threadIdx.x == 1) ? "G" : "B";
