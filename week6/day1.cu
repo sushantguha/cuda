@@ -22,7 +22,7 @@ __global__ void branch() {
 }
 
 int main() {
-    branch<<<1, 256>>>();
+    branch<<<1024, 256>>>();
     cudaDeviceSynchronize();
     return 0;
 }
