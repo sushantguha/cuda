@@ -2,12 +2,12 @@
 
 __global__ void branch() {
     if (threadIdx.x % 2 == 0) {
-        printf("Even thread: %d\n", threadIdx.x);
+        // printf("Even thread: %d\n", threadIdx.x);
     } else {
-        printf("Odd thread: %d\n", threadIdx.x);
+        // printf("Odd thread: %d\n", threadIdx.x);
     }
     __syncwarp();
-    printf("Completed thread: %d\n", threadIdx.x);
+    // printf("Completed thread: %d\n", threadIdx.x);
 }
 
 int main() {
