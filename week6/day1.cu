@@ -12,7 +12,7 @@ __device__ __noinline__ int work_b(int v) {
 
 __global__ void branch(int* out) {
     int v;
-    if ((threadIdx.x % 2) == 0) {
+    if (((threadIdx.x / 32) % 2) == 0) {
         v = work_a(0);
     } else {
         v = work_b(1);
