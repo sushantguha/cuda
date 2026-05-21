@@ -200,10 +200,10 @@ Each day's tasks are scoped to what the listed resources actually teach. A "Reso
 2. Run `scripts/ncu_collect.sh`:
    ```bash
    ncu --target-processes all \
-       --metrics dram__bytes_read.sum,dram__bytes_write.sum,sm__cycles_elapsed.avg,\
-                 dram__throughput.avg.pct_of_peak_sustained_elapsed \
+       --metrics dram__bytes_read.sum,dram__bytes_write.sum,sm__cycles_elapsed.avg,dram__throughput.avg.pct_of_peak_sustained_elapsed \
        --csv ./build/frameforge --runs 1 > reports/day5_ncu.csv
    ```
+   (Keep the metric list on one line — splitting it across lines injects whitespace into the comma-list, which ncu then mistakes for an executable argument.)
    (`--runs 1` because ncu replays each kernel internally to gather metrics; an in-code timing loop of 50 just multiplies profile time without adding signal.)
    (If `ncu` is unavailable on the dev machine, fall back to `nvprof --metrics achieved_occupancy,gld_throughput,gst_throughput`.)
 3. Write **`reports/day5_apod_report.md`** — one printed page, structured as the four APOD letters:
