@@ -1,42 +1,29 @@
 #include <iostream>
 
-__global__ void branch() {
-    // if ((threadIdx.x / 32) % 2) {
-    //     // printf("Even thread: %d\n", threadIdx.x);
-    //     int a = 1;
-    // } else {
-    //     // printf("Odd thread: %d\n", threadIdx.x);
-    //     int b = 2;
-    // }
-
+__global__ void branch(int* out) {
+    int v;
     if ((threadIdx.x % 2) == 0) {
-        // printf("Even thread: %d\n", threadIdx.x);
-        int a = 1;
+        v = 0;
+        for (int i = 0; i < 100; i++) v = v * 3 + i;
     } else {
-        // printf("Odd thread: %d\n", threadIdx.x);
-        int b = 2;
+        v = 1;
+        for (int i = 0; i < 100; i++) v = v * 5 + i;
     }
     __syncwarp();
-    // printf("Completed thread: %d\n", threadIdx.x);
-    int c = 3;
+    out[blockIdx.x * blockDim.x + threadIdx.x] = v;
 }
 
 int main() {
-    branch<<<1024, 256>>>();
+    const int blocks  = 1024;
+    const int threads = 256;
+    const int N       = blocks * threads;
+
+    int* d_out;
+    cudaMalloc(&d_out, N * sizeof(int));
+
+    branch<<<blocks, threads>>>(d_out);
     cudaDeviceSynchronize();
+
+    cudaFree(d_out);
     return 0;
 }
-
-// WITH WARP DIVERGENCE
-//   "ID","Process ID","Process Name","Host Name","Kernel Name","Context","Stream","Block Size","Grid Size","Device","CC","Section Name","Metric Name","Metric Unit","Metric Value"                                                                                                                      
-//   "0","2583","a","127.0.0.1","branch()","1","7","(256, 1, 1)","(1, 1, 1)","0","7.5","Command line profiler metrics","dram__bytes_read.sum","byte","2,816"                                                                                                                                             
-//   "0","2583","a","127.0.0.1","branch()","1","7","(256, 1, 1)","(1, 1, 1)","0","7.5","Command line profiler metrics","dram__bytes_write.sum","byte","0"                                                                                                                                                
-//   "0","2583","a","127.0.0.1","branch()","1","7","(256, 1, 1)","(1, 1, 1)","0","7.5","Command line profiler metrics","dram__throughput.avg.pct_of_peak_sustained_elapsed","%","0.38"                                                                                                                   
-//   "0","2583","a","127.0.0.1","branch()","1","7","(256, 1, 1)","(1, 1, 1)","0","7.5","Command line profiler metrics","sm__cycles_elapsed.avg","cycle","1,362.20"  
-
-// WITHOUT WARP DIVERGENCE
-// ID,Process ID,Process Name,Host Name,Kernel Name,Context,Stream,Block Size,Grid Size,Device,CC,Section Name,Metric Name,Metric Unit,Metric Value                                                                                                                                                    
-//   0,3696,a,127.0.0.1,branch(),1,7,(256, 1, 1),(1, 1, 1),0,7.5,Command line profiler metrics,dram__bytes_read.sum,byte,2,816                                                                                                                                                                           
-//   0,3696,a,127.0.0.1,branch(),1,7,(256, 1, 1),(1, 1, 1),0,7.5,Command line profiler metrics,dram__bytes_write.sum,byte,0                                                                                                                                                                              
-//   0,3696,a,127.0.0.1,branch(),1,7,(256, 1, 1),(1, 1, 1),0,7.5,Command line profiler metrics,dram__throughput.avg.pct_of_peak_sustained_elapsed,%,0.39                                                                                                                                                 
-//   0,3696,a,127.0.0.1,branch(),1,7,(256, 1, 1),(1, 1, 1),0,7.5,Command line profiler metrics,sm__cycles_elapsed.avg,cycle,1,363.20     
